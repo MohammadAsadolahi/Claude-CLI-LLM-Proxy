@@ -1,65 +1,33 @@
+<h1 align="center">Claude CLI &rarr; OpenAI Proxy</h1>
+
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/badge/%E2%9C%A6_Claude_CLI_%E2%86%92_OpenAI_Proxy-6366f1?style=for-the-badge&labelColor=1e1b4b">
-    <img src="https://img.shields.io/badge/%E2%9C%A6_Claude_CLI_%E2%86%92_OpenAI_Proxy-6366f1?style=for-the-badge&labelColor=1e1b4b" alt="Claude CLI to OpenAI Proxy" height="40"/>
-  </picture>
+  A lightweight FastAPI bridge that lets any OpenAI-compatible client<br>
+  talk to your local Claude CLI — zero API keys required.
 </p>
 
 <p align="center">
-  <strong>A lightweight FastAPI bridge that lets any OpenAI-compatible client<br>talk to your local Claude CLI — zero API keys required.</strong>
-</p>
-
-<p align="center">
-  <img src="https://img.shields.io/badge/Python-3.9+-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python"/>
+  <img src="https://img.shields.io/badge/Python-3.9+-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python 3.9+"/>
+  &nbsp;
   <img src="https://img.shields.io/badge/FastAPI-0.115+-009688?style=flat-square&logo=fastapi&logoColor=white" alt="FastAPI"/>
-  <img src="https://img.shields.io/badge/OpenAI_Compatible-412991?style=flat-square&logo=openai&logoColor=white" alt="OpenAI"/>
-  <img src="https://img.shields.io/badge/Claude_CLI-Local-D97706?style=flat-square&logo=anthropic&logoColor=white" alt="Claude"/>
-  <img src="https://img.shields.io/badge/License-MIT-22c55e?style=flat-square" alt="License"/>
+  &nbsp;
+  <img src="https://img.shields.io/badge/OpenAI_Compatible-412991?style=flat-square&logo=openai&logoColor=white" alt="OpenAI Compatible"/>
+  &nbsp;
+  <img src="https://img.shields.io/badge/License-MIT-22c55e?style=flat-square" alt="MIT License"/>
 </p>
 
 <p align="center">
-  <a href="#why-this-exists">Why</a>&ensp;&bull;&ensp;<a href="#architecture">Architecture</a>&ensp;&bull;&ensp;<a href="#quick-start">Quick Start</a>&ensp;&bull;&ensp;<a href="#api-reference">API</a>&ensp;&bull;&ensp;<a href="#client-examples">Clients</a>&ensp;&bull;&ensp;<a href="#configuration">Config</a>
+  <a href="#architecture">Architecture</a> &middot;
+  <a href="#quick-start">Quick Start</a> &middot;
+  <a href="#configuration">Configuration</a> &middot;
+  <a href="#api-reference">API Reference</a> &middot;
+  <a href="#client-examples">Client Examples</a>
 </p>
 
 ---
 
-## Why This Exists
+### The Problem
 
-<table>
-<tr>
-<td width="50%" valign="top">
-
-**The problem**
-
-Your tools, SDKs, and IDE extensions speak **OpenAI**. Claude CLI speaks its own protocol. Without a translation layer, they can't communicate.
-
-```mermaid
-graph LR
-    A["Your App<br><i>OpenAI format</i>"] -. "incompatible" .-> B["claude.exe"]
-    style A fill:#1e293b,stroke:#334155,color:#e2e8f0
-    style B fill:#1e293b,stroke:#334155,color:#e2e8f0
-    linkStyle 0 stroke:#ef4444,stroke-dasharray:5
-```
-
-</td>
-<td width="50%" valign="top">
-
-**The solution**
-
-This proxy sits between them — accepts OpenAI-format requests, calls your local `claude.exe`, and returns OpenAI-format responses. Drop-in, transparent.
-
-```mermaid
-graph LR
-    A["Your App"] --> B["Proxy :8082"] --> C["claude.exe"]
-    C --> B --> A
-    style A fill:#1e293b,stroke:#6366f1,color:#e2e8f0
-    style B fill:#6366f1,stroke:#4f46e5,color:#fff
-    style C fill:#d97706,stroke:#b45309,color:#fff
-```
-
-</td>
-</tr>
-</table>
+Your tools speak OpenAI. Claude CLI speaks its own protocol. Without a translation layer they can't communicate. This proxy sits in the middle — it accepts standard OpenAI-format requests, invokes your local `claude.exe`, and returns standard OpenAI-format responses. No API key. No cloud dependency. Drop-in compatible.
 
 ---
 
@@ -70,18 +38,18 @@ graph TB
     subgraph Clients
         C1["OpenAI SDKs"]
         C2["IDE Extensions"]
-        C3["AI Agent Frameworks"]
-        C4["Custom Applications"]
+        C3["Agent Frameworks"]
+        C4["Custom Apps"]
     end
 
-    subgraph Proxy["FastAPI Proxy &ensp; :8082"]
+    subgraph Proxy["FastAPI Proxy · port 8082"]
         direction TB
         P1["Request Translator"]
         P2["Response Builder"]
         P3["Error Handler"]
     end
 
-    subgraph Backend
+    subgraph Backend["Local Backend"]
         B1["claude.exe"]
         B2["Built-in Auth"]
     end
@@ -90,14 +58,14 @@ graph TB
     P1 --> B1
     B1 --> P2
     P2 --> C1 & C2 & C3 & C4
-    P3 -. "fallback" .-> P2
+    P3 -. fallback .-> P2
     B1 --- B2
 
     style P1 fill:#6366f1,stroke:#4f46e5,color:#fff
-    style P2 fill:#0ea5e9,stroke:#0284c7,color:#fff
-    style P3 fill:#64748b,stroke:#475569,color:#fff
+    style P2 fill:#6366f1,stroke:#4f46e5,color:#fff
+    style P3 fill:#6366f1,stroke:#4f46e5,color:#fff
     style B1 fill:#d97706,stroke:#b45309,color:#fff
-    style B2 fill:#92400e,stroke:#78350f,color:#fff
+    style B2 fill:#d97706,stroke:#b45309,color:#fff
     style C1 fill:#1e293b,stroke:#334155,color:#e2e8f0
     style C2 fill:#1e293b,stroke:#334155,color:#e2e8f0
     style C3 fill:#1e293b,stroke:#334155,color:#e2e8f0
@@ -107,8 +75,6 @@ graph TB
 ---
 
 ## Request Lifecycle
-
-A complete trace of how a single request flows through the system:
 
 ```mermaid
 sequenceDiagram
@@ -120,15 +86,15 @@ sequenceDiagram
     Note over P: Parse messages, detect tools
 
     alt Has tool definitions
-        Note over P: Augment system prompt<br>with JSON schema
+        Note over P: Augment system prompt with JSON schema
     end
 
-    P->>+CLI: subprocess: claude.exe -p --output-format json
-    Note over CLI: Local auth, no API key
-    CLI-->>-P: JSON envelope<br>{result, usage, cost}
+    P->>+CLI: subprocess · --output-format json
+    Note over CLI: Local auth · no API key
+    CLI-->>-P: JSON envelope {result, usage, cost}
 
     alt Tool call response
-        Note over P: Extract JSON args,<br>build tool_calls array
+        Note over P: Extract JSON args, build tool_calls
         P-->>C: finish_reason: tool_calls
     else Text response
         P-->>-C: finish_reason: stop
@@ -141,27 +107,27 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-    A["Incoming<br>Request"] --> B{"Tools<br>defined?"}
+    A["Request"] --> B{"Tools?"}
 
-    B -- "yes" --> C["Augment system prompt<br>with JSON schema"]
-    B -- "no" --> D["Pass through<br>messages"]
+    B -- yes --> C["Augment prompt\nwith schema"]
+    B -- no --> D["Pass through\nmessages"]
 
-    C & D --> E["Execute<br>claude.exe"]
+    C & D --> E["claude.exe"]
 
-    E --> F{"Exit<br>code"}
+    E --> F{"Exit\ncode"}
 
-    F -- "0" --> G["Parse JSON<br>envelope"]
-    F -- "!= 0" --> H{"Rate<br>limited?"}
+    F -- 0 --> G["Parse\nenvelope"]
+    F -- fail --> H{"Rate\nlimited?"}
 
-    H -- "yes" --> I["429"]
-    H -- "no" --> J["500"]
+    H -- yes --> I["429"]
+    H -- no --> J["500"]
 
-    G --> K{"Tool<br>response?"}
+    G --> K{"Tool\nresponse?"}
 
-    K -- "yes" --> L["Build<br>tool_calls"]
-    K -- "no" --> M["Build text<br>response"]
+    K -- yes --> L["Build\ntool_calls"]
+    K -- no --> M["Build text\nresponse"]
 
-    L & M --> N["Return OpenAI-<br>format JSON"]
+    L & M --> N["OpenAI-format\nresponse"]
 
     style A fill:#6366f1,stroke:#4f46e5,color:#fff
     style E fill:#d97706,stroke:#b45309,color:#fff
@@ -185,33 +151,29 @@ flowchart LR
 
 <table>
 <tr>
-<td align="center" width="25%">
-
-**OpenAI Compatible**
-
-Drop-in replacement for any client that speaks the OpenAI API format — SDKs, agents, IDE plugins.
-
+<td align="center" width="25%" valign="top">
+<br>
+<strong>OpenAI Compatible</strong><br><br>
+Drop-in replacement for any client that speaks the OpenAI API — SDKs, agents, IDE plugins.
+<br><br>
 </td>
-<td align="center" width="25%">
-
-**Tool Calling**
-
-Full function-calling support via schema-augmented system prompts. Returns proper `tool_calls` responses.
-
+<td align="center" width="25%" valign="top">
+<br>
+<strong>Tool Calling</strong><br><br>
+Function-calling support via schema-augmented system prompts. Returns proper <code>tool_calls</code> responses.
+<br><br>
 </td>
-<td align="center" width="25%">
-
-**Zero API Keys**
-
-Uses Claude CLI's built-in auth. No Anthropic API key needed for the proxy.
-
+<td align="center" width="25%" valign="top">
+<br>
+<strong>Zero API Keys</strong><br><br>
+Uses Claude CLI's built-in auth. No Anthropic API key needed for the proxy itself.
+<br><br>
 </td>
-<td align="center" width="25%">
-
-**Production Ready**
-
-Async FastAPI, configurable timeouts, rate-limit detection, and structured error handling.
-
+<td align="center" width="25%" valign="top">
+<br>
+<strong>Production Ready</strong><br><br>
+Async FastAPI, configurable timeouts, rate-limit detection, and structured error responses.
+<br><br>
 </td>
 </tr>
 </table>
@@ -220,39 +182,22 @@ Async FastAPI, configurable timeouts, rate-limit detection, and structured error
 
 ## Quick Start
 
-### Prerequisites
-
-| Requirement | Version | Purpose |
-|:--|:--|:--|
-| Python | `3.9+` (recommended `3.11`) | Runtime |
-| Claude CLI | Latest | AI backend — [`claude.exe`](https://docs.anthropic.com/en/docs/claude-cli) |
-| pip | Any | Dependency installation |
-
-### Install
+**Prerequisites** — Python 3.9+ &nbsp;&middot;&nbsp; A working [`claude.exe`](https://docs.anthropic.com/en/docs/claude-cli) &nbsp;&middot;&nbsp; pip
 
 ```bash
+# clone and install
 git clone https://github.com/MohammadAsadolahi/Claude-CLI-OpenAI-Proxy.git
 cd Claude-CLI-OpenAI-Proxy
-
 python -m venv .venv
-.venv\Scripts\activate            # Linux/Mac: source .venv/bin/activate
+.venv\Scripts\activate              # Linux/Mac: source .venv/bin/activate
 pip install -r requirements.txt
-```
 
-### Run
-
-```bash
+# run
 python server.py
-```
 
-### Verify
-
-```bash
+# verify
 curl http://127.0.0.1:8082/health
-```
-
-```json
-{ "status": "ok", "model": "haiku", "effort": "max" }
+# → { "status": "ok", "model": "haiku", "effort": "max" }
 ```
 
 ---
@@ -264,13 +209,13 @@ All settings use environment variables with sensible defaults.
 | Variable | Default | Description |
 |:--|:--|:--|
 | `CLAUDE_PATH` | `C:\Users\AG\.local\bin\claude.exe` | Path to Claude CLI binary |
-| `CLAUDE_MODEL` | `haiku` | Model alias — `haiku`, `sonnet`, or `opus` |
-| `CLAUDE_EFFORT` | `max` | Thinking effort — `min` `low` `balanced` `high` `max` |
+| `CLAUDE_MODEL` | `haiku` | Model alias — `haiku` · `sonnet` · `opus` |
+| `CLAUDE_EFFORT` | `max` | Thinking effort — `min` · `low` · `balanced` · `high` · `max` |
 | `PORT` | `8082` | HTTP listen port |
 | `CLAUDE_TIMEOUT` | `300` | Per-request timeout in seconds |
 
 <details>
-<summary>PowerShell example</summary>
+<summary><strong>PowerShell example</strong></summary>
 
 ```powershell
 $env:CLAUDE_PATH   = 'C:\Users\AG\.local\bin\claude.exe'
@@ -283,7 +228,7 @@ python server.py
 </details>
 
 <details>
-<summary>Bash example</summary>
+<summary><strong>Bash example</strong></summary>
 
 ```bash
 export CLAUDE_PATH="/usr/local/bin/claude"
@@ -305,7 +250,7 @@ python server.py
 | `GET` | `/v1/models` | List available models |
 | `GET` | `/health` | Health check with config info |
 
-### `POST /v1/chat/completions`
+### POST `/v1/chat/completions`
 
 <details open>
 <summary><strong>Text completion</strong></summary>
@@ -401,7 +346,7 @@ curl -X POST http://127.0.0.1:8082/v1/chat/completions \
 
 </details>
 
-### `GET /v1/models`
+### GET `/v1/models`
 
 ```json
 {
@@ -416,7 +361,7 @@ curl -X POST http://127.0.0.1:8082/v1/chat/completions \
 
 <table>
 <tr>
-<td width="50%">
+<td width="50%" valign="top">
 
 **Python**
 
@@ -436,7 +381,7 @@ print(resp.choices[0].message.content)
 ```
 
 </td>
-<td width="50%">
+<td width="50%" valign="top">
 
 **JavaScript**
 
@@ -458,7 +403,7 @@ console.log(resp.choices[0].message.content);
 </td>
 </tr>
 <tr>
-<td width="50%">
+<td width="50%" valign="top">
 
 **cURL**
 
@@ -469,7 +414,7 @@ curl http://localhost:8082/v1/chat/completions \
 ```
 
 </td>
-<td width="50%">
+<td width="50%" valign="top">
 
 **Any OpenAI-compatible tool**
 
@@ -479,8 +424,7 @@ API_KEY:  not-needed
 MODEL:    haiku
 ```
 
-Works with **Continue**, **Cursor**, **LangChain**,
-**LlamaIndex**, **AutoGen**, and more.
+Works with **Continue**, **Cursor**, **LangChain**, **LlamaIndex**, **AutoGen**, and more.
 
 </td>
 </tr>
@@ -490,28 +434,12 @@ Works with **Continue**, **Cursor**, **LangChain**,
 
 ## Error Handling
 
-```mermaid
-graph LR
-    A["Request"] --> B{"Process"}
-    B -- "ok" --> C["200"]
-    B -- "rate limit" --> D["429"]
-    B -- "cli error" --> E["500"]
-    B -- "timeout" --> F["504"]
-
-    style C fill:#10b981,stroke:#059669,color:#fff
-    style D fill:#f59e0b,stroke:#d97706,color:#fff
-    style E fill:#ef4444,stroke:#dc2626,color:#fff
-    style F fill:#6366f1,stroke:#4f46e5,color:#fff
-    style A fill:#1e293b,stroke:#334155,color:#e2e8f0
-    style B fill:#1e293b,stroke:#6366f1,color:#e2e8f0
-```
-
 | Status | Type | Cause |
-|:--:|:--|:--|
+|:--|:--|:--|
 | **200** | Success | Valid response returned |
-| **429** | `rate_limit_error` | CLI rate-limited or overloaded |
-| **500** | `internal_error` | CLI crash, bad JSON, or parse failure |
-| **504** | `timeout_error` | CLI exceeded `CLAUDE_TIMEOUT` |
+| **429** | `rate_limit_error` | CLI is rate-limited or overloaded |
+| **500** | `internal_error` | CLI crash, invalid JSON, or parse failure |
+| **504** | `timeout_error` | CLI exceeded `CLAUDE_TIMEOUT` seconds |
 
 ---
 
@@ -519,10 +447,10 @@ graph LR
 
 ```
 .
-├── server.py             FastAPI app — proxy logic, endpoints, CLI invocation
-├── test_server.py        End-to-end tests (chat, tool calls, NLP pipeline)
-├── requirements.txt      Dependencies: fastapi, uvicorn, openai
-├── .env.example          Environment variable template
+├── server.py           FastAPI app — proxy logic, endpoints, CLI invocation
+├── test_server.py      End-to-end tests (chat, tool calls, NLP pipeline)
+├── requirements.txt    Dependencies: fastapi, uvicorn, openai
+├── .env.example        Environment variable template
 └── README.md
 ```
 
@@ -530,7 +458,7 @@ graph LR
 
 ## Testing
 
-Start the server, then run the test suite in a second terminal:
+Start the server in one terminal, then run the test suite in another:
 
 ```bash
 python server.py          # terminal 1
@@ -547,10 +475,10 @@ python test_server.py     # terminal 2
 
 ## Security
 
-| | |
+| Aspect | Detail |
 |:--|:--|
 | **Local execution** | Shells out to a local `claude.exe` binary. No requests leave your machine via the proxy. |
-| **No credentials needed** | Uses Claude CLI's built-in authentication. The proxy itself requires no API key. |
+| **No credentials** | Uses Claude CLI's built-in authentication. The proxy itself requires no API key. |
 | **Network exposure** | Binds to `0.0.0.0` by default. For production, deploy behind an authenticated gateway with TLS. |
 
 ---
@@ -560,21 +488,21 @@ python test_server.py     # terminal 2
 <details>
 <summary><strong>500 — CLI errors</strong></summary>
 
-Check server logs for `claude.exe` stderr. Common causes: wrong `CLAUDE_PATH`, incompatible CLI version, or malformed JSON output.
+Check server logs for `claude.exe` stderr output. Common causes: wrong `CLAUDE_PATH`, incompatible CLI version, or malformed JSON returned by the CLI.
 
 </details>
 
 <details>
 <summary><strong>429 — Rate limiting</strong></summary>
 
-The proxy detects rate-limit signals ("rate", "429", "overloaded") from CLI output and returns HTTP 429. Wait and retry.
+The proxy detects rate-limit signals from CLI output (keywords: "rate", "429", "overloaded") and surfaces them as HTTP 429. Wait and retry.
 
 </details>
 
 <details>
 <summary><strong>504 — Timeouts</strong></summary>
 
-Increase `CLAUDE_TIMEOUT` (default: 300s) or use a faster model like `haiku`.
+Increase `CLAUDE_TIMEOUT` (default: 300s) or switch to a faster model like `haiku`.
 
 </details>
 
@@ -592,7 +520,9 @@ Increase `CLAUDE_TIMEOUT` (default: 300s) or use a faster model like `haiku`.
 
 <p align="center">
   <img src="https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white" alt="FastAPI"/>
+  &nbsp;
   <img src="https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python"/>
+  &nbsp;
   <img src="https://img.shields.io/badge/Anthropic-191919?style=flat-square&logo=anthropic&logoColor=white" alt="Anthropic"/>
 </p>
 
