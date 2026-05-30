@@ -2,7 +2,7 @@
 Claude CLI -> OpenAI-compatible API Proxy
 
 Wraps claude.exe to serve OpenAI-format chat completions and batch processing.
-Uses Claude Haiku 4.5 with max thinking effort.
+Uses Claude Haiku 4.5 with low thinking effort by default.
 
 No Anthropic API key needed — uses Claude CLI's built-in auth.
 
@@ -17,6 +17,9 @@ import asyncio
 import json
 import logging
 import os
+
+from dotenv import load_dotenv
+load_dotenv()
 import random
 import re
 import subprocess
@@ -37,8 +40,9 @@ CLAUDE_PATH = os.environ.get(
     "CLAUDE_PATH", r"C:\Users\AG\.local\bin\claude.exe"
 )
 MODEL = os.environ.get("CLAUDE_MODEL", "haiku")
-EFFORT = os.environ.get("CLAUDE_EFFORT", "max")
+EFFORT = os.environ.get("CLAUDE_EFFORT", "low")
 PORT = int(os.environ.get("PORT", "8082"))
+MAX_THINKING_TOKENS = os.environ.get("MAX_THINKING_TOKENS", "")
 TIMEOUT = int(os.environ.get("CLAUDE_TIMEOUT", "300"))
 BATCH_MAX_CONCURRENT = int(os.environ.get("BATCH_MAX_CONCURRENT", "3"))
 BATCH_MAX_RETRIES = int(os.environ.get("BATCH_MAX_RETRIES", "5"))
@@ -87,6 +91,8 @@ async def call_claude(
         "--effort", EFFORT,
         "--output-format", "json",
     ]
+    if MAX_THINKING_TOKENS:
+        cmd.extend(["--max-thinking-tokens", MAX_THINKING_TOKENS])
     if system:
         cmd.extend(["--system-prompt", system])
     cmd.append(prompt)
@@ -725,6 +731,7 @@ async def health():
         "status": "ok",
         "model": MODEL,
         "effort": EFFORT,
+        "max_thinking_tokens": MAX_THINKING_TOKENS or None,
         "claude_path": CLAUDE_PATH,
         "batch_max_concurrent": BATCH_MAX_CONCURRENT,
         "active_batches": sum(
