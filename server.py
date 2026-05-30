@@ -73,6 +73,8 @@ def _run_claude(cmd: list, timeout: int) -> subprocess.CompletedProcess:
         cmd,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=timeout,
         stdin=subprocess.DEVNULL,
     )
