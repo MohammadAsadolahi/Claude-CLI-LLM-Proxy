@@ -42,11 +42,23 @@ Expected:
 ```
 
 If this fails with a connection error, the proxy is not running. Start it from the proxy
-repo (`c:\Users\AG\Documents\GIT_PERSONAL\CaludeCLI LLM Proxy`):
+repo (`c:\Users\AG\Documents\GIT_PERSONAL\CaludeCLI LLM Proxy`) — either natively:
 
 ```powershell
 python server.py
 ```
+
+or as a container on Docker Desktop (recommended — survives reboots, nothing to babysit):
+
+```powershell
+docker compose up -d --build     # first time; afterwards just: docker compose up -d
+docker logs -f claude-cli-proxy  # watch calls
+```
+
+The container bind-mounts your `~/.claude` (OAuth login) and copies `~/.claude.json` at
+start-up, so it uses the same Claude Code login as the host — no API key. If you re-login
+on the host, restart the container. The image pins the Claude Code CLI version
+(`CLAUDE_CODE_VERSION` in `docker-compose.yml`); bump it when you upgrade the host CLI.
 
 > If you are an agent in a **different** repo and `/health` is unreachable, do **not** try to
 > guess — tell the user the proxy needs to be started, or start it from the proxy directory.
@@ -146,13 +158,15 @@ print(args["triplets"])
 ```
 
 **Rules for tool calls (how the proxy actually behaves):**
-- You **must** set both `tools` and `tool_choice` to trigger tool mode.
-- Only the **first** tool in the `tools` list is used. The forced name comes from
-  `tool_choice.function.name` if given, otherwise the first tool's name.
-- The model is instructed to return raw JSON matching `function.parameters`. The proxy is
-  tolerant — it strips markdown fences and extracts the first balanced `{...}` if needed.
+- All tools in `tools` are described to the model (name, description, parameters).
+- Without `tool_choice` (or with `"auto"`) the model chooses between a plain-text answer
+  and a tool call — the normal agent loop (call → `role: "tool"` result → next turn) works.
+  `tool_choice: {"function": …}` / `"required"` forces a call; `"none"` disables tools.
+- Tool calls are prompt-based: the model is asked for raw JSON and the proxy is tolerant —
+  it strips markdown fences and extracts the first balanced `{...}` if needed.
 - Response comes back with `finish_reason: "tool_calls"` and the JSON in
-  `message.tool_calls[0].function.arguments` (a JSON **string**, per OpenAI convention).
+  `message.tool_calls[i].function.arguments` (a JSON **string**, per OpenAI convention).
+  In streaming mode the call arrives as a single `delta.tool_calls` chunk.
 
 ---
 
@@ -177,29 +191,68 @@ print(args["triplets"])
 
 **Read this before integrating — the proxy is not a full OpenAI clone.**
 
-1. **Model is fixed server-side.** The `model` field in your request is **ignored**. The
-   actual model (`haiku` / `sonnet` / `opus`) and thinking effort are set by environment
-   variables on the proxy (`CLAUDE_MODEL`, `CLAUDE_EFFORT`). To use a different model, the
-   proxy must be restarted with different env vars. Check `/health` for the live model.
+1. **Model.** `model` is honoured when it is `haiku`, `sonnet`, `opus` or a full
+   `claude-*` id; anything else (e.g. `gpt-4o-mini`) silently falls back to the proxy's
+   `CLAUDE_MODEL`. Check `/health` for the live defaults.
 
-2. **Only one system + one user message are used.** The proxy scans `messages` and keeps
-   the **last** `system` message and the **last** `user` message. It does **not** support
-   multi-turn conversation history, and it ignores `assistant` messages. If you need
-   context from prior turns, fold it into a single user (or system) message yourself.
+1b. **Thinking (per request).** Extended thinking can be controlled per request with any
+   of these OpenAI/OpenRouter/Anthropic-compatible body fields (first match wins):
 
-3. **No streaming.** `stream: true` is not supported. Always read the full response.
+   ```jsonc
+   {"reasoning_effort": "medium"}                          // OpenAI style:
+                                                           // none|minimal → off,
+                                                           // low → 3000, medium → 8000,
+                                                           // high → 16000, xhigh → 24000
+   {"reasoning": {"effort": "low"}}                        // OpenRouter style
+   {"reasoning": {"max_tokens": 4096}}                     // explicit budget (min 1024, max 32000)
+   {"reasoning": {"enabled": false}}                       // off
+   {"thinking": {"type": "enabled", "budget_tokens": 4096}}// Anthropic style
+   ```
 
-4. **Sampling params are ignored.** `temperature`, `top_p`, `max_tokens`, `stop`, etc. have
+   The budget is delivered to the CLI via the `MAX_THINKING_TOKENS` environment
+   variable for that call only; `0` disables thinking. Requests without any of these
+   fields use the server-wide `MAX_THINKING_TOKENS` env default (or the CLI default
+   when unset). Thinking deltas are not forwarded to the client — only the final
+   answer text — but thinking tokens do count toward `completion_tokens`.
+   Note `CLAUDE_EFFORT`/`--effort` maps to the API effort parameter, which Haiku
+   does not support; the thinking budget above is the lever that actually works
+   on Haiku.
+
+2. **Multi-turn history is supported.** All `system`/`developer` messages are joined into
+   the system prompt; `user`, `assistant` (including their `tool_calls`) and `tool`
+   messages are flattened into a transcript, because the CLI is stateless per call. Long
+   histories therefore cost input tokens on every turn — trim on the client side if needed.
+
+3. **Streaming is supported.** `stream: true` returns standard SSE chunks
+   (`chat.completion.chunk` … `data: [DONE]`); `stream_options.include_usage` adds the final
+   usage chunk. Chunks arrive as the CLI emits them (roughly every 100–200 characters,
+   not per token). A failure mid-stream arrives as a `data: {"error": …}` event.
+
+4. **Tools.** With `tools` and no `tool_choice` (or `"auto"`) the model decides: it either
+   answers in text or emits a JSON tool call that the proxy converts into OpenAI
+   `tool_calls` with `finish_reason: "tool_calls"`. `tool_choice: {"function": …}` or
+   `"required"` forces a call; `"none"` disables tools. This is prompt-based, so a model
+   may occasionally answer in text where a call was expected — handle both branches.
+
+5. **`response_format`** (`json_object` / `json_schema`) is honoured via prompt
+   instructions; the reply is buffered and returned as clean JSON (fences stripped).
+
+6. **Sampling params are ignored.** `temperature`, `top_p`, `max_tokens`, `stop`, etc. have
    no effect — generation is controlled by the CLI's model/effort settings.
 
-5. **`n > 1` not supported.** Exactly one choice is returned.
+7. **`n > 1` not supported.** Exactly one choice is returned.
 
-6. **Message `content` must be a plain string.** Send `"content": "text"`, not the
-   OpenAI content-parts array. No image/multimodal input.
+8. **Content parts.** `content` may be a string or the OpenAI parts array; text parts are
+   concatenated. **Images are supported**: `image_url` parts with a `data:image/...;base64,`
+   URL (jpeg/png/gif/webp) or an `http(s)` URL are forwarded to Claude as real image
+   blocks (via the CLI's `--input-format stream-json`), from any user turn; each is
+   referenced in the transcript as `[Image N attached]`. Audio parts still become
+   `[audio omitted]`.
 
-7. **Usage numbers** are mapped from the CLI: `prompt_tokens` includes cache read/creation
+9. **Usage numbers** are mapped from the CLI: `prompt_tokens` includes cache read/creation
    input tokens; `completion_tokens` is output tokens. Cost is logged server-side, not
-   returned in the response body.
+   returned in the response body. Claude Code's built-in tools are disabled per call
+   (`--tools ""`), so the fixed overhead is ~150 input tokens instead of ~23k.
 
 ---
 
@@ -300,9 +353,12 @@ These are set where the **proxy** runs (env vars or its `.env`), not by the clie
 | `CLAUDE_EFFORT` | `low` | `min` · `low` · `balanced` · `high` · `max` |
 | `PORT` | `8082` | Listen port |
 | `CLAUDE_TIMEOUT` | `300` | Per-request seconds |
-| `MAX_THINKING_TOKENS` | _(unset)_ | Optional cap to reduce usage |
+| `MAX_THINKING_TOKENS` | _(unset)_ | Server-wide default thinking budget; per-request `reasoning_effort`/`reasoning`/`thinking` fields override it (see §1b) |
 | `BATCH_MAX_CONCURRENT` | `3` | Parallel workers per batch |
 | `BATCH_MAX_RETRIES` | `5` | Retries per batch item on rate-limit/timeout |
+| `CLAUDE_EXTRA_ARGS` | `--tools ""` | Extra CLI flags (disables built-in tools). Never add `--bare` — it skips the stored login |
+| `DEFAULT_SYSTEM_PROMPT` | `You are a helpful assistant.` | Used when a request has no system message (otherwise the CLI injects its own ~7k-token one) |
+| `CLAUDE_CODE_VERSION` | _(see docker-compose.yml)_ | Docker only — CLI version baked into the image |
 
 ---
 
@@ -310,10 +366,11 @@ These are set where the **proxy** runs (env vars or its `.env`), not by the clie
 
 1. Point the OpenAI client at `base_url="http://localhost:8082/v1"`, `api_key="not-needed"`.
 2. `GET /health` first — if it fails, the proxy isn't running.
-3. Use one `system` + one `user` message; don't rely on multi-turn history or streaming.
-4. The `model` you pass is cosmetic; the real model lives in the proxy's env.
-5. For structured output, force a single tool via `tools` + `tool_choice` and read
-   `tool_calls[0].function.arguments`.
+3. Full message history, `stream: true` and `tools` (auto or forced) all work like OpenAI;
+   history is re-sent on every turn, so keep it trimmed.
+4. Pass `model` as `haiku` / `sonnet` / `opus`; anything else falls back to the proxy's env.
+5. For structured output, force a tool via `tools` + `tool_choice` (or use
+   `response_format`) and read `tool_calls[0].function.arguments`.
 6. Retry on `429`/`504`; surface `500` to the user.
 7. For bulk work, use the Files + Batches flow (results are in-memory — download before the
    proxy stops).

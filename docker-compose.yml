@@ -1,0 +1,45 @@
+# Claude CLI -> OpenAI proxy on Docker Desktop.
+#
+#   docker compose up -d --build
+#   curl http://localhost:8082/health
+#
+# Uses the host's Claude Code login (no API key): ~/.claude is bind-mounted
+# (OAuth credentials, shared with the host CLI) and ~/.claude.json is copied in
+# at start-up. Both paths can be overridden with CLAUDE_HOME / CLAUDE_JSON.
+#
+# Values in .env (CLAUDE_MODEL, CLAUDE_EFFORT, …) are picked up for
+# interpolation below; CLAUDE_PATH from .env is intentionally NOT used — the
+# container has its own CLI at /usr/local/bin/claude.
+
+name: claude-proxy
+
+services:
+  proxy:
+    build:
+      context: .
+      args:
+        CLAUDE_CODE_VERSION: ${CLAUDE_CODE_VERSION:-2.1.204}
+    image: claude-cli-proxy:latest
+    container_name: claude-cli-proxy
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8082}:8082"
+    environment:
+      - CLAUDE_PATH=/usr/local/bin/claude
+      - PORT=8082
+      - CLAUDE_MODEL=${CLAUDE_MODEL:-haiku}
+      - CLAUDE_EFFORT=${CLAUDE_EFFORT:-low}
+      - CLAUDE_TIMEOUT=${CLAUDE_TIMEOUT:-300}
+      - MAX_THINKING_TOKENS=${MAX_THINKING_TOKENS:-}
+      - BATCH_MAX_CONCURRENT=${BATCH_MAX_CONCURRENT:-3}
+      - BATCH_MAX_RETRIES=${BATCH_MAX_RETRIES:-5}
+      - CLAUDE_EXTRA_ARGS=${CLAUDE_EXTRA_ARGS:---tools ""}
+    volumes:
+      - ${CLAUDE_HOME:-~/.claude}:/home/node/.claude
+      - ${CLAUDE_JSON:-~/.claude.json}:/host-claude/.claude.json:ro
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8082/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
